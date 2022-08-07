@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("//pico/config:defs.bzl", "BOARD_LIST")
 
 WRAP_FUNCTIONS = [
     "__aeabi_cdcmpeq",
@@ -313,19 +314,40 @@ pico_add_map_output = rule(
 
 # attr is the attributes from pico_stdio_binary below
 def _config_override_impl(settings, attr):
+    if attr.float_impl == "pico":
+        float_impl = "@pico-sdk//:pico_float_pico"
+    else:
+        float_impl = "@pico-sdk//:pico_float_none"
+    if attr.double_impl == "pico":
+        double_impl = "@pico-sdk//:pico_double_pico"
+    else:
+        double_impl = "@pico-sdk//:pico_double_none"
+    
     return {
+        "@rules_pico//pico/config:board": attr.board,
         "@rules_pico//pico/config:stdio_uart": attr.stdio_uart,
         "@rules_pico//pico/config:stdio_usb": attr.stdio_usb,
         "@rules_pico//pico/config:stdio_semihosting": attr.stdio_semihosting,
+        "@rules_pico//pico/config:float_impl": float_impl,
+        "@rules_pico//pico/config:double_impl": double_impl,
+        "@rules_pico//pico/config:rtos_adapter_enable": attr.rtos_adapter_enable,
+        "@rules_pico//pico/config:rtos_adapter_header": attr.rtos_adapter_header,
+        "@rules_pico//pico/config:rtos_adapter_header_name": attr.rtos_adapter_header_name,
     }
 
 config_override = transition(
     implementation = _config_override_impl,
     inputs = [],
     outputs = [
+        "@rules_pico//pico/config:board",
         "@rules_pico//pico/config:stdio_uart",
         "@rules_pico//pico/config:stdio_usb",
         "@rules_pico//pico/config:stdio_semihosting",
+        "@rules_pico//pico/config:float_impl",
+        "@rules_pico//pico/config:double_impl",
+        "@rules_pico//pico/config:rtos_adapter_enable",
+        "@rules_pico//pico/config:rtos_adapter_header",
+        "@rules_pico//pico/config:rtos_adapter_header_name",
     ],
 )
 
@@ -349,6 +371,11 @@ pico_build_with_config = rule(
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
+        "board": attr.string(
+            doc = "Name of the Pico board to target",
+            default = "pico",
+            values = BOARD_LIST,
+        ),
         "stdio_uart": attr.bool(
             doc = "Set to true to enable stdio output over UART",
             default = True,
@@ -360,6 +387,28 @@ pico_build_with_config = rule(
         "stdio_semihosting": attr.bool(
             doc = "Set to true to enable stdio output via debugger",
             default = False,
+        ),
+        "float_impl": attr.string(
+            doc = "Single-precision floating point math implementation to use. Either 'pico' or 'none'",
+            default = "pico",
+            values = ["pico", "none"],
+        ),
+        "double_impl": attr.string(
+            doc = "Double-precision floating point math implementation to use. Either 'pico' or 'none'",
+            default = "pico",
+            values = ["pico", "none"],
+        ),
+        "rtos_adapter_enable": attr.bool(
+            doc = "Set to true to have pico-sdk headers include a PICO_CONFIG_RTOS_ADAPTER_HEADER, specified in the rtos_adapter_header and rtos_adapter_header_name attributes of this rule",
+            default = False,
+        ),
+        "rtos_adapter_header": attr.label(
+            doc = "A cc_library target providing RTOS integration defines that will be included in all pico-sdk sources",
+            default = "@pico-sdk//:rtos_adapter_header_none",
+        ),
+        "rtos_adapter_header_name": attr.string(
+            doc = "Literal name by which rtos_adapter_header should be #included, for example freertos_sdk_config.h",
+            default = "",
         ),
         "input": attr.label(
             cfg = config_override,
